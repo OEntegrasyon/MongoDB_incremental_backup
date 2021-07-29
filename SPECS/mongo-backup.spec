@@ -15,7 +15,7 @@ Requires:   mongodb-org-tools >= 4.4.4
 Requires:   mongodb-org-shell >= 4.4.7
 
 %description
-Deneme
+It is a RPM package that can save incremental backups for the MogoDb and restore them in point-time recovery.
 
 %prep
 if [ -d /etc/mongobackup/ ]; then
