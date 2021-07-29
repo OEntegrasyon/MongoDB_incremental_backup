@@ -25,8 +25,17 @@
 
 [![MongoDB Restore](https://img.youtube.com/vi/EJQs6vlcBLk/0.jpg)](https://www.youtube.com/watch?v=EJQs6vlcBLk)
 
+# Download
 
 [mongoInc-backup-0.1-1.fc34.x86_64.rpm](https://github.com/OEntegrasyon/MongoDB_incremental_backup/releases/download/mongoInc-backup/mongoInc-backup-0.1-1.fc34.x86_64.rpm)
+
+### Sorumluluk Reddi
+
+Bu .rpm paketinin ve betiklerin hiçbirinin doğru çalışcağı kabul edilmez! Bu site tarafından sağlanan herhangi bir bilginin  doğruluğu, eksiksizliği veya kullanışlılığı veya bu komut dosyalarının kullanılmasının neden olabileceği herhangi bir zarar için hiçbir sorumluluk kabul edilmemektedir.
+
+
+
+
 
 
 
