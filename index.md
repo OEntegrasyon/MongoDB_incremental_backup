@@ -1,37 +1,42 @@
-## Welcome to GitHub Pages
+# MongoDB incremental backup
 
-You can use the [editor on GitHub](https://github.com/OEntegrasyon/MongoDB_incremental_backup/edit/gh-pages/index.md) to maintain and preview the content for your website in Markdown files.
+## backup
 
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
+ => Backup mekanizması
+ * Yedekleme config dosyasında belirten sayıda full ve inc backup almaktadır.
+ * ilk yedek full olacaktır.
+ * Config dosyasında belirtildiği üzere dizine yedekleri zaman damgası ile kayıt edecektir.
+ * Yedek alma işlemi başarılı olursa sistem bunu sqlite tablosuna kayıt edecektir.
+ * Full yedeklemeden sonra kayıt olunan zaman damgasından sonraki değişikler inc backup olarak kayıt altına alınacaktır.
+ * Inc backup sayısı mod ile kontrol edilip daha sonra tekrar full yedek alma işlemine başlamaktadır.
+ 
+## restore
 
-### Markdown
+=> Restore mekanizması
+* Yedekleten geri dönmek için dialog sayesinde tablodan okunan tüm değerler gösterilir.
+* Inc backupdan dönülmek istenilirse; önce full backup a geri dönülür daha sonra sırası ile inc backuplar yüklenir.
+* Yükleme işlemleri bittikten sonra(Her bir parti); kontrolün manuel olmasını sağlamak için,  geçişlerde enter tuşuna basması beklenir.
+* Tuşa basıldıktan sonra sırası itibariyle diğer inc backup'lar yüklenir.
+* ``` mongostat ``` aracı ile restore işlemi gerçek zamanlı izlenebilmektedir.
 
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
 
-```markdown
-Syntax highlighted code block
+## Video
+* Restore işlemi kısaca gösterilmiştir.
 
-# Header 1
-## Header 2
-### Header 3
+[![MongoDB Restore](https://img.youtube.com/vi/EJQs6vlcBLk/0.jpg)](https://www.youtube.com/watch?v=EJQs6vlcBLk)
 
-- Bulleted
-- List
+# Download
 
-1. Numbered
-2. List
+[mongoInc-backup-0.1-1.fc34.x86_64.rpm](https://github.com/OEntegrasyon/MongoDB_incremental_backup/releases/download/mongoInc-backup/mongoInc-backup-0.1-1.fc34.x86_64.rpm)
 
-**Bold** and _Italic_ and `Code` text
+### Sorumluluk Reddi
 
-[Link](url) and ![Image](src)
-```
+Bu .rpm paketinin ve betiklerin hiçbirinin doğru çalışcağı kabul edilmez! Bu site tarafından sağlanan herhangi bir bilginin  doğruluğu, eksiksizliği veya kullanışlılığı veya bu komut dosyalarının kullanılmasının neden olabileceği herhangi bir zarar için hiçbir sorumluluk kabul edilmemektedir.
 
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
 
-### Jekyll Themes
 
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/OEntegrasyon/MongoDB_incremental_backup/settings/pages). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
 
-### Support or Contact
 
-Having trouble with Pages? Check out our [documentation](https://docs.github.com/categories/github-pages-basics/) or [contact support](https://support.github.com/contact) and we’ll help you sort it out.
+
+
+
