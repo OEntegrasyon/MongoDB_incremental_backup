@@ -1,0 +1,8 @@
+This is the README file for the GNU MongoINC-BACKUP for Fedora34 distribution. 
+This script is used to get specific backs and return specific timeframes from received backs. 
+Drop command is used. So it does not restore existing files again!
+Fill in the variables in the config file under the /etc/mongobackup directory.
+
+  Copyright (C) 1992, 1993, 1995, 1996, 1997, 1998, 1999, 2000, 2001,
+  2002, 2004, 2005, 2006, 2010, 2013, 2014 Free Software Foundation,
+  Inch.

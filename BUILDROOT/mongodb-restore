@@ -1,0 +1,164 @@
+#!/bin/bash
+scriptinit(){
+source /etc/mongobackup/mongodb-backup.config
+
+}
+
+log()
+{
+   MESSAGE_LEVEL=$1
+   shift
+   MESSAGE="$@"
+
+   if [ $MESSAGE_LEVEL -le $LOG_LEVEL ]; then
+      echo "`date +'%Y-%m-%dT%H:%M:%S.%3N'` $MESSAGE" >> $log_file
+   fi
+}
+
+scriptinit
+
+mongo_stat(){
+    mongostat --host $mongo_host -u $mongo_user -p $mongo_pwd --authenticationDatabase=admin  > mongostat.log </dev/null &
+    echo $!
+}
+##########Full Backup######################
+
+full_inc_backup(){
+    path=$(get_value2 "PATH"  'BACKUPNUMBER' $1)
+    clear >$(tty)
+    stat=$(mongo_stat)
+    mongorestore -h $mongo_host -u $mongo_user -p $mongo_pwd    --authenticationDatabase=admin   $path >  restore.log 2>&1  </dev/null &
+    restore=$!
+    dialog --keep-window --begin 10 0 --tailboxbg restore.log 20 110 \
+            --and-widget --keep-window --begin 10 120 --tailboxbg   mongostat.log 20 110 \
+            --and-widget --begin 41 100 --msgbox "Press Enter to exit." 5 25
+    wait $restore
+    echo -e "\n"
+    kill -9 $restore
+    clear >$(tty)
+    dialog --title "OZGUR ENTEGRASYON" --infobox 'Now waiting INC BACKUP READY!' 6 100
+    sleep 3
+    clear >$(tty)
+
+
+
+    
+    
+
+}
+
+full_backup(){
+path=$(get_value2 "PATH"  'BACKUPNUMBER' $1)
+clear >$(tty)
+stat=$(mongo_stat)
+mongorestore -h $mongo_host -u $mongo_user -p $mongo_pwd    --authenticationDatabase=admin   $path >  restore.log 2>&1  </dev/null &
+p2=$!
+dialog --keep-window --begin 10 0 --tailboxbg restore.log 20 110 \
+  --and-widget --keep-window --begin 10 120 --tailboxbg   mongostat.log 20 110 \
+  --and-widget --begin 41 100 --msgbox "Press Enter to exit." 5 25
+kill -9 $stat
+kill -9 $p2
+wait $p2
+clear >$(tty)
+dialog --title "FINISH" --msgbox 'Thanks to  usage that tool!' 6 100
+clear >$(tty)
+kill -9 $p2
+exit 1
+}
+###########backup-inc-function#############
+inc_backup_step2(){
+    filename=$(get_value2  'FILENAME'  'BACKUPNUMBER' $1)
+    path_inc=$(get_value2  'PATH'  'BACKUPNUMBER' $1)
+    inc_dbt=$(get_value2  'DBT'  'BACKUPNUMBER' $1)
+    inc_ncn=$(get_value2  'NCN'  'BACKUPNUMBER' $1)
+    echo "$path_inc/$filename" 
+    echo  "$inc_dbt:$inc_ncn"
+    mongorestore -h $mongo_host -u $mongo_user -p $mongo_pwd  --authenticationDatabase=admin --oplogFile "$path_inc/$filename" --oplogReplay --dir /tmp/emptyDirForOpRestore --oplogLimit="$inc_dbt:$inc_ncn" > increstore.log 2>&1  </dev/null &
+    incbackup=$!
+    dialog --keep-window --begin 10 0 --tailboxbg increstore.log 20 110 \
+            --and-widget --keep-window --begin 10 120 --tailboxbg   mongostat.log 20 110 \
+            --and-widget --begin 41 100 --msgbox "Press Enter to exit." 5 25
+    wait $incbackup
+    echo -e "\n"
+    kill -9 $incbackup
+    clear >$(tty)
+    dialog --title "INCBACKUP $filename" --infobox "Now waiting time: $inc_dbt INC BACKUP READY!" 6 20
+    sleep 3
+    clear >$(tty)
+}
+
+inc_backup(){
+    mod=$(($1 % $repetitions ))
+
+    
+    if [ $mod -ne 0 ]
+    then 
+        inc_backup_step2 $1
+    else
+        full_inc_backup $1
+        
+        
+    fi
+}
+
+restore_start(){
+    
+    number=$(get_value 'BACKUPNUMBER'  $1)
+    mod=$(($number % $repetitions ))
+    if [ $mod -ne 0 ]
+    then 
+    echo "INC BACKUP"
+    let=$mod
+    while [ $let -ge 0 ] ;do
+         inc_backup $(($number-$let))
+         let let=let-1
+         
+    done
+    else
+    echo $number
+    full_backup $number
+    fi
+}
+restore_exit(){
+    exit 1
+}
+
+getall_table(){
+     echo `sqlite3 $db_name "SELECT DBTYPE, BACKUPNUMBER, TIMESTAMP FROM replica_table";`
+}
+
+get_value(){
+    echo `sqlite3 $db_name "select $1 FROM replica_table WHERE id=$2 ";`
+}
+
+get_value2(){
+    echo `sqlite3 $db_name "select $1 FROM replica_table WHERE $2=$3 ";`
+}
+dialog_table_list(){
+let i=0 
+W=() 
+while  IFS='|' read -r line; do 
+    let i=$i+1
+    W+=($i "$line"  )
+done < <( sqlite3 $db_name "SELECT DBTYPE, BACKUPNUMBER, TIMESTAMP FROM replica_table" )
+BackupNumber=$(dialog --title   "MONGODB BACKUP|OZGUR ENTEGRASYON" --menu  "List" 24 80 17   "${W[@]}" 3>&2 2>&1 1>&3) 
+if [ $? -eq 0 ]; then 
+clear >$(tty)
+dialog --title "MONGODB BACKUP|OZGUR ENTEGRASYON" \
+--yesno "Are you sure  time: $(get_value   'TIMESTAMP' $BackupNumber) type:  $(get_value  'DBTYPE' $BackupNumber) ?" 7 60
+response=$?
+clear >$(tty)
+case $response in
+   0) restore_start $BackupNumber ;;
+   1) restore_exit;;
+   255) dialog_table_list;;
+esac    
+fi
+
+}
+
+dialog_table_list
+
+
+
+

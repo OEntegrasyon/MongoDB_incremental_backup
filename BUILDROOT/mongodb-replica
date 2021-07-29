@@ -1,0 +1,200 @@
+#!/bin/bash
+scriptinit(){
+source /etc/mongobackup/mongodb-backup.config
+check1_function
+}
+
+log()
+{
+   MESSAGE_LEVEL=$1
+   shift
+   MESSAGE="$@"
+
+   if [ $MESSAGE_LEVEL -le $LOG_LEVEL ]; then
+      echo "`date +'%Y-%m-%dT%H:%M:%S.%3N'` $MESSAGE" >> $log_file
+   fi
+}
+check1_function(){
+  if [ -d $install_dir ]
+  then
+
+    check2_function
+  else
+
+    createdir
+  fi
+}
+
+check2_function(){
+  if [[ -f $log_file ]] &&  [[ -f  $db_name ]]
+   then
+    log $LOG_MESSAGE_INFO "file exits"
+   else
+
+     touch $log_file && touch $db_name
+     sqtable_create
+  fi
+}
+
+
+
+sqtable_create(){
+
+  sqlite3 $db_name <<EOF
+create table replica_table (id INTEGER PRIMARY KEY,DBTYPE TEXT,BACKUPNUMBER INTEGER,DBT INTEGER,NCN INTEGER,PATH TEXT,FILENAME TEXT,TIMESTAMP TEXT,STATUS  TEXT );
+EOF
+log $LOG_MESSAGE_INFO  "sqlite_Table_create"
+}
+
+createdir(){
+
+  mkdir -p $install_dir
+  mkdir -p "$install_dir/back-up"
+  mkdir -p "$install_dir/logs"
+  mkdir -p "$install_dir/db"
+  check1_function
+}
+
+dump_error_insert(){
+sqlite3 $db_name "insert into  replica_table (DBTYPE,BACKUPNUMBER,STATUS) values ('$1','$2','$3');"
+log $LOG_MESSAGE_WARN "Dump Eroor params: (DBTYPE:'$1',BACKUPNUMBER:'$2',STATUS:'$3') "
+}
+inc_backup(){
+  mongodump -h $mongo_host -u $mongo_user -p $mongo_pwd    --authenticationDatabase=admin  -d local -c oplog.rs --query "{\"ts\":{\"\$gt\":{\"\$timestamp\":{\"t\":${1},\"i\":${2}}}}}" -o - > "${3}/${4}.bson"
+   log $LOG_MESSAGE_INFO  "------inc backup params---------->"TIME= ${1}   INC=${2}"------------${3}/${4}.bson"
+}
+
+getdbt_sqlite(){
+  echo `sqlite3 $db_name "select DBT FROM replica_table WHERE id=$1 ";`
+}
+ncn_sqlite(){
+  echo `sqlite3 $db_name "select NCN FROM replica_table WHERE id=$1 ";`
+}
+getpath_sqlite(){
+  echo `sqlite3 $db_name "select PATH FROM replica_table WHERE id=$1 ";`
+}
+getstatus_sqlite(){
+  echo `sqlite3 $db_name "select STATUS FROM replica_table WHERE id=$1 ";`
+}
+lastbackupnumber_sqlite(){
+  echo `sqlite3 $db_name "select BACKUPNUMBER FROM replica_table ORDER BY BACKUPNUMBER DESC LIMIT 1";`
+  log $LOG_MESSAGE_INFO "lastbackupnumber_sqlite"
+}
+counter_full_sqlite(){
+      echo `sqlite3 $db_name 'select count(*) from replica_table  where DBTYPE="FULL"';`
+      log $LOG_MESSAGE_INFO "counter_full_sqlite"
+}
+
+lastid_sqlite(){
+  echo `sqlite3 $db_name "select rowid from replica_table order by ROWID DESC limit 1";`
+}
+inc_parse_dtp(){
+  echo ` bsondump $1 | tail -n 1 | jq '.ts[].t'`
+}
+inc_parse_inc(){
+  echo ` bsondump $1 | tail -n 1 | jq '.ts[].i'`
+}
+check_dbt_ncn(){
+  echo $3
+  if [ -z $3  ]
+  then
+    log $LOG_MESSAGE_WARN "no difference detected"
+  else
+    insert_sqlite "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8"
+    log $LOG_MESSAGE_INFO  "check_dbt_ncn---------------->insert_sqlite "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8""
+  fi
+
+}
+
+check_first_full_backup(){
+  return `sqlite3 $db_name "select count(*) from replica_table"`
+
+}
+
+
+insert_sqlite(){
+   #echo $DBTYPE  $NAME $TIMESTAMP $OPLOG $STATUS
+   sqlite3 $db_name "insert into  replica_table (DBTYPE,BACKUPNUMBER,DBT,NCN,PATH,FILENAME,TIMESTAMP,STATUS) values ('$1','$2','$3','$4','$5','$6','$7','$8');"
+}
+
+
+
+scriptinit
+check_first_full_backup
+#######if the result is zero =>Full Backup##############
+if [ $? -eq 0 ]
+then
+  log $LOG_MESSAGE_INFO "full first backup"
+  timestamp=$(date +"%s")
+  mongodump -h $mongo_host -u $mongo_user -p $mongo_pwd    --authenticationDatabase=admin  --oplog  --out="$out_dir/full-$timestamp"
+  if [ $? -eq 0 ]
+  then
+
+    DBT=$(bsondump "$out_dir/full-$timestamp/oplog.bson" | tail -n 1  | jq '.ts[].t')
+    NCN=$(bsondump "$out_dir/full-$timestamp/oplog.bson" | tail -n 1 | jq '.ts[].i')
+    insert_sqlite "FULL" 0  "$DBT" "$NCN" "$out_dir/full-$timestamp"  "oplog.bson" $(date +"%D")  "True"
+    log $LOG_MESSAGE_INFO  "insert_sqlite "FULL" 0  "$DBT" "$NCN" "$out_dir/full-$timestamp"  "oplog.bson" $(date +"%D")  "True""
+  else
+    log $LOG_MESSAGE_WARN "fail full dump"
+    dump_error_insert "FULL" 0  "False"
+    exit 1
+  fi
+else
+  echo "first backup avaible"
+  lastnumber=$(lastbackupnumber_sqlite)
+  lastid=$(lastid_sqlite)
+  opdbt=$(getdbt_sqlite $lastid)
+  inc=$(ncn_sqlite $lastid)
+  path=$(getpath_sqlite $lastid)
+  status=$(getstatus_sqlite $lastid)
+  nextnumber=`echo $lastnumber + 1 | bc`
+  mod=$(($nextnumber % $repetitions ))
+  timestamp=$(date +"%s")
+  echo $mod
+  if [ $status == "True" ]
+  then
+    log $LOG_MESSAGE_INFO "old backup status True"
+    if [ $mod -ne 0 ]
+      then
+      log $LOG_MESSAGE_INFO "INC BACKUP START"
+      inc_backup "$opdbt" "$inc" "$path" "$timestamp"
+      log $LOG_MESSAGE_DEBUG "inc_backup "$opdbt" "$inc" "$path" "$timestamp""
+      if [ $? -eq 0 ]
+        then
+          DBT=$(inc_parse_dtp "$path/$timestamp.bson")
+          NCN=$(inc_parse_inc "$path/$timestamp.bson")
+          check_dbt_ncn "INC" "$nextnumber" "$DBT" "$NCN" "$path" "$timestamp.bson"  "`date "+%Y/%m/%d-%H:%M:%S"`"  "True"
+          log $LOG_MESSAGE_DEBUG "check_dbt_ncn "INC" "$nextnumber" "$DBT" "$NCN" "$path" "$timestamp.bson"  "`date "+%Y/%m/%d-%H:%M:%S"`"  "True""
+          #insert_sqlite "INC" "$nextnumber" "$DBT" "$NCN" "$path" "$timestamp.bson"  $(date +"%D")  "True"
+        else
+          dump_error_insert "INC" "$nextnumber"  "False"
+          log $LOG_MESSAGE_DEBUG  "dump_error_insert "INC" "$nextnumber"  "False""
+      fi
+    else
+        timestamp=$(date +"%s")
+        mongodump -h $mongo_host -u $mongo_user -p $mongo_pwd    --authenticationDatabase=admin  --oplog  --out="$out_dir/full-$timestamp"
+        log $LOG_MESSAGE_DEBUG  "mongodump -h $mongo_host -u $mongo_user -p $mongo_pwd    --authenticationDatabase=admin  --oplog  --out="$out_dir/full-$timestamp""
+        if [ $? -eq 0 ]
+        then
+          DBT=$(bsondump "$out_dir/full-$timestamp/oplog.bson" | tail -n 1  | jq '.ts[].t')
+          NCN=$(bsondump "$out_dir/full-$timestamp/oplog.bson" | tail -n 1 | jq '.ts[].i')
+          full_count=$(counter_full_sqlite)
+          number=`echo $full_count + 1 | bc`
+          insert_sqlite "FULL"  "$nextnumber"  "$DBT" "$NCN" "$out_dir/full-$timestamp" "oplog.bson"  $(date +"%D")  "True"
+          log $LOG_MESSAGE_DEBUG ""FULL"  "$nextnumber"  "$DBT" "$NCN" "$out_dir/full-$timestamp"  $(date +"%D")  "True""
+        else
+          log $LOG_MESSAGE_WARN "fail full dump"
+          insert_sqlite "FULL" 0  " "  $(date +"%D") " "  "False"
+          exit 1
+        fi
+     fi
+    else
+     echo "error in old backup"
+     exit 1
+    fi
+
+  fi
+
+
+
+
