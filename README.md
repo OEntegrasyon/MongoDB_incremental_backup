@@ -22,6 +22,7 @@ Tuşa basıldıktan sonra sırası itibariyle diğer inc backup'lar yüklenir.
 
 ## Video
 * Restore işlemi kısaca gösterilmiştir.
+
 [![MongoDB Restore](https://img.youtube.com/vi/EJQs6vlcBLk/0.jpg)](https://www.youtube.com/watch?v=EJQs6vlcBLk)
 
 
